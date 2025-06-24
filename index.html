@@ -303,6 +303,32 @@
           // Get the app ID from the global variable (provided by Canvas)
           const appId = typeof __app_id !== 'undefined' ? __app_id : 'default-app-id';
 
+          // NOVO: Função para enviar dados ao webhook
+          const sendWebhook = useCallback(async () => {
+            try {
+              const webhookUrl = "https://automacao.taimeagencia.com.br/webhook/d55f26f2-8b5a-4e5a-b075-ba91646e2734";
+              const response = await fetch(webhookUrl, {
+                method: "POST",
+                headers: {
+                  "Content-Type": "application/json",
+                },
+                body: JSON.stringify({
+                  userId,
+                  startDate,
+                  endDate,
+                }),
+              });
+              if (!response.ok) {
+                const errorText = await response.text();
+                console.error("Erro ao enviar webhook:", response.status, errorText);
+              } else {
+                console.log("Webhook enviado com sucesso");
+              }
+            } catch (error) {
+              console.error("Erro ao enviar webhook (catch):", error);
+            }
+          }, [userId, startDate, endDate]); // userId, startDate, endDate como dependências
+
           useEffect(() => {
             // Autenticação Firebase
             const signInUser = async () => {
@@ -406,6 +432,7 @@
             const today = new Date().toISOString().split('T')[0];
             setStartDate(today);
             setEndDate(today);
+            // sendWebhook() is not called here, as filter reset might not need to trigger n8n
           };
 
           if (loadingFirebase) {
@@ -550,7 +577,10 @@
                   />
                 </div>
                 <button
-                  onClick={fetchData}
+                  onClick={() => {
+                    fetchData();
+                    sendWebhook(); // Chama o webhook ao aplicar o filtro
+                  }}
                   className="px-6 py-2 rounded-lg font-bold transition duration-300 ease-in-out transform hover:scale-105 shadow-lg"
                   style={{ backgroundColor: taimeColors.primaryPurple, color: taimeColors.lightText, boxShadow: `0 4px 15px -5px ${taimeColors.primaryPurple}` }}
                 >
