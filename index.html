@@ -4,475 +4,686 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Dashboard de Prospecção Ativa - Taime Agência</title>
-    <link rel="icon" href="data:;base64,iVBORw0KGgo=">
-    <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-app-compat.js"></script>
-    <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-auth-compat.js"></script>
-    <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-firestore-compat.js"></script>
-    <script src="https://unpkg.com/react@18/umd/react.development.js"></script>
-    <script src="https://unpkg.com/react-dom@18/umd/react-dom.development.js"></script>
-    <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+    <!-- Tailwind CSS CDN -->
     <script src="https://cdn.tailwindcss.com"></script>
+    <!-- Google Fonts - Inter -->
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
     <style>
-        body, html {
+        body {
+            font-family: 'Inter', sans-serif;
             margin: 0;
             padding: 0;
-            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Roboto', sans-serif;
+            box-sizing: border-box;
         }
-        .loading-spinner {
-            border: 2px solid #f3f3f3;
-            border-top: 2px solid #28e7c5;
-            border-radius: 50%;
-            width: 20px;
-            height: 20px;
-            animation: spin 1s linear infinite;
-            margin-right: 8px;
-        }
-        @keyframes spin {
-            0% { transform: rotate(0deg); }
-            100% { transform: rotate(360deg); }
-        }
-        .quick-filter-btn {
-            padding: 8px 16px;
-            margin: 4px;
-            border-radius: 8px;
-            font-size: 12px;
-            font-weight: 600;
-            cursor: pointer;
-            transition: all 0.3s ease;
-            border: 2px solid transparent;
-        }
-        .quick-filter-btn:hover {
-            transform: scale(1.05);
+        /* Custom styles for charts if needed, or adjust Tailwind classes */
+        svg {
+            display: block;
+            margin: auto;
+            max-width: 100%;
+            height: auto;
         }
     </style>
 </head>
-<body>
+<body class="min-h-screen" style="background-color: #201e26;">
     <div id="root"></div>
 
-    <script type="text/babel">
-        const { useState, useEffect } = React;
+    <!-- React CDN -->
+    <script crossorigin src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
+    <script crossorigin src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
+    <!-- Babel for JSX transformation (in-browser, for development only) -->
+    <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
 
-        const App = () => {
-            const [funnelData, setFunnelData] = useState({
-                leads: 0,
-                qualification: 0,
-                meeting: 0,
-                proposal: 0,
-                closedBusiness: 0,
-            });
-            const [startDate, setStartDate] = useState('2025-06-01');
-            const [endDate, setEndDate] = useState('2025-06-25');
-            const [filterStatus, setFilterStatus] = useState('');
-            const [isProcessing, setIsProcessing] = useState(false);
-            const [firebaseReady, setFirebaseReady] = useState(false);
-            const [lastUpdate, setLastUpdate] = useState('');
-
-            const colors = {
-                darkBackground: '#201e26',
-                primaryPurple: '#6843e1',
-                secondaryGreen: '#28e7c5',
-                white: '#ffffff',
-                grayText: '#a0aec0',
-            };
-
-            // Configuração do Firebase
-            const firebaseConfig = {
-                apiKey: "AIzaSyC4TCs_jnYgbLautTgKHZloeMnV3RuVKrM",
-                authDomain: "dashboard-prospeccao-ativa.firebaseapp.com",
-                projectId: "dashboard-prospeccao-ativa",
-                storageBucket: "dashboard-prospeccao-ativa.firebasestorage.app",
-                messagingSenderId: "878548277840",
-                appId: "1:878548277840:web:70a7de867f66dbcb5e8f55"
-            };
-
-            // Inicialização do Firebase
-            useEffect(() => {
-                const initFirebase = async () => {
-                    try {
-                        console.log("🔥 Inicializando Firebase...");
-                        
-                        if (!firebase.apps.length) {
-                            firebase.initializeApp(firebaseConfig);
-                        }
-                        
-                        const auth = firebase.auth();
-                        await auth.signInAnonymously();
-                        console.log("✅ Firebase conectado");
-                        
-                        setFirebaseReady(true);
-                        
-                        // Carregar dados iniciais
-                        await loadDataFromFirebase();
-                        
-                        // Configurar listener para mudanças em tempo real
-                        setupRealtimeListener();
-                        
-                    } catch (error) {
-                        console.error("❌ Erro no Firebase:", error);
-                        setFilterStatus(`Erro Firebase: ${error.message}`);
-                    }
-                };
-
-                initFirebase();
-            }, []);
-
-            // Configurar listener em tempo real
-            const setupRealtimeListener = () => {
-                const db = firebase.firestore();
-                const docRef = db.doc('artifacts/dashboard-prospeccao-ativa/public/data/salesDashboardData/funnelSummary');
-                
-                console.log("👂 Configurando listener em tempo real...");
-                
-                docRef.onSnapshot((doc) => {
-                    if (doc.exists) {
-                        const data = doc.data();
-                        console.log("📊 Dados atualizados:", data);
-                        
-                        setFunnelData({
-                            leads: data.leads || 0,
-                            qualification: data.qualification || 0,
-                            meeting: data.meeting || 0,
-                            proposal: data.proposal || 0,
-                            closedBusiness: data.closedBusiness || 0,
-                        });
-                        
-                        if (data.filterApplied) {
-                            setFilterStatus(data.filterApplied);
-                        }
-                        
-                        if (data.timestamp) {
-                            const timestamp = data.timestamp.seconds ? 
-                                new Date(data.timestamp.seconds * 1000) : 
-                                new Date(data.timestamp);
-                            setLastUpdate(timestamp.toLocaleString());
-                        }
-                        
-                        setIsProcessing(false);
-                    }
-                }, (error) => {
-                    console.error("❌ Erro no listener:", error);
-                    setIsProcessing(false);
-                });
-            };
-
-            // Função para ler dados do Firebase
-            const loadDataFromFirebase = async () => {
-                if (!firebaseReady) return;
-
-                try {
-                    const db = firebase.firestore();
-                    const docRef = db.doc('artifacts/dashboard-prospeccao-ativa/public/data/salesDashboardData/funnelSummary');
-                    const doc = await docRef.get();
-                    
-                    if (doc.exists) {
-                        const data = doc.data();
-                        console.log("📊 Dados carregados:", data);
-                        
-                        setFunnelData({
-                            leads: data.leads || 0,
-                            qualification: data.qualification || 0,
-                            meeting: data.meeting || 0,
-                            proposal: data.proposal || 0,
-                            closedBusiness: data.closedBusiness || 0,
-                        });
-                        
-                        if (data.filterApplied) {
-                            setFilterStatus(data.filterApplied);
-                        }
-                        
-                        console.log("✅ Dados do dashboard carregados");
-                    } else {
-                        console.log("📄 Documento não existe");
-                        setFilterStatus("Nenhum dado encontrado");
-                    }
-                } catch (error) {
-                    console.error("❌ Erro ao carregar dados:", error);
-                    setFilterStatus(`Erro: ${error.message}`);
-                }
-            };
-
-            // Aplicar filtro via webhook N8N
-            const applyDateFilter = async () => {
-                if (!startDate || !endDate) {
-                    alert("Por favor, selecione as datas");
-                    return;
-                }
-
-                setIsProcessing(true);
-                setFilterStatus('Enviando filtro para N8N...');
-
-                try {
-                    console.log("📡 Enviando filtro para N8N...");
-                    
-                    const payload = {
-                        startDate: startDate,
-                        endDate: endDate,
-                        timestamp: new Date().toISOString()
-                    };
-                    
-                    console.log("📤 Payload:", payload);
-                    
-                    const response = await fetch("https://automacao.taimeagencia.com.br/webhook-test/d55f26f2-8b5a-4e5a-b075-ba91646e2734", {
-                        method: "POST",
-                        headers: {
-                            "Content-Type": "application/json"
-                        },
-                        body: JSON.stringify(payload)
-                    });
-
-                    if (response.ok) {
-                        console.log("✅ Filtro enviado com sucesso");
-                        setFilterStatus(`Filtro aplicado: ${startDate} até ${endDate} - Aguardando dados...`);
-                        // Os dados serão atualizados automaticamente pelo listener
-                    } else {
-                        throw new Error(`Erro HTTP: ${response.status}`);
-                    }
-                    
-                } catch (error) {
-                    console.error("❌ Erro ao enviar filtro:", error);
-                    setFilterStatus(`Erro ao aplicar filtro: ${error.message}`);
-                    setIsProcessing(false);
-                }
-            };
-
-            // Filtros rápidos
-            const applyQuickFilter = async (filterKey) => {
-                const today = new Date();
-                const year = today.getFullYear();
-                const month = today.getMonth();
-                
-                const filters = {
-                    thisMonth: {
-                        start: new Date(year, month, 1).toISOString().split('T')[0],
-                        end: new Date(year, month + 1, 0).toISOString().split('T')[0],
-                        label: 'Este Mês'
-                    },
-                    lastMonth: {
-                        start: new Date(year, month - 1, 1).toISOString().split('T')[0],
-                        end: new Date(year, month, 0).toISOString().split('T')[0],
-                        label: 'Mês Passado'
-                    },
-                    june2025: {
-                        start: '2025-06-01',
-                        end: '2025-06-30',
-                        label: 'Junho 2025'
-                    },
-                    firstHalf: {
-                        start: '2025-06-01',
-                        end: '2025-06-15',
-                        label: 'Primeira Quinzena Jun'
-                    },
-                    secondHalf: {
-                        start: '2025-06-16',
-                        end: '2025-06-30',
-                        label: 'Segunda Quinzena Jun'
-                    },
-                    allData: {
-                        start: '2020-01-01',
-                        end: '2030-12-31',
-                        label: 'Todos os Dados'
-                    }
-                };
-
-                const filter = filters[filterKey];
-                if (filter) {
-                    setStartDate(filter.start);
-                    setEndDate(filter.end);
-                    
-                    setIsProcessing(true);
-                    setFilterStatus(`Aplicando ${filter.label}...`);
-                    
-                    try {
-                        const payload = {
-                            startDate: filter.start,
-                            endDate: filter.end,
-                            timestamp: new Date().toISOString()
-                        };
-                        
-                        const response = await fetch("https://automacao.taimeagencia.com.br/webhook-test/d55f26f2-8b5a-4e5a-b075-ba91646e2734", {
-                            method: "POST",
-                            headers: {
-                                "Content-Type": "application/json"
-                            },
-                            body: JSON.stringify(payload)
-                        });
-
-                        if (response.ok) {
-                            console.log(`✅ ${filter.label} aplicado`);
-                            setFilterStatus(`${filter.label} aplicado - Aguardando dados...`);
-                        } else {
-                            throw new Error(`Erro HTTP: ${response.status}`);
-                        }
-                        
-                    } catch (error) {
-                        console.error("❌ Erro no filtro rápido:", error);
-                        setFilterStatus(`Erro ao aplicar ${filter.label}`);
-                        setIsProcessing(false);
-                    }
-                }
-            };
-
-            // Função para calcular taxa de conversão
-            const calculateConversionRate = (from, to) => {
-                if (from === 0) return '0.00%';
-                return ((to / from) * 100).toFixed(2) + '%';
-            };
-
-            const conversionRates = {
-                leadsToQualification: calculateConversionRate(funnelData.leads, funnelData.qualification),
-                qualificationToMeeting: calculateConversionRate(funnelData.qualification, funnelData.meeting),
-                meetingToProposal: calculateConversionRate(funnelData.meeting, funnelData.proposal),
-                proposalToClosed: calculateConversionRate(funnelData.proposal, funnelData.closedBusiness),
-                overall: calculateConversionRate(funnelData.leads, funnelData.closedBusiness),
-            };
-
-            // Componentes
-            const FunnelCard = ({ title, value, bgColor }) => (
-                <div className="flex flex-col items-center p-4 rounded-xl shadow-lg mx-1 my-2 w-full md:w-[19%] md:min-w-[150px]" style={{ backgroundColor: bgColor }}>
-                    <h3 className="text-xl font-semibold mb-2" style={{ color: colors.white }}>{title}</h3>
-                    <p className="text-4xl font-bold" style={{ color: colors.white }}>{value}</p>
-                </div>
-            );
-
-            const ConversionRateCard = ({ title, rate }) => (
-                <div className="flex flex-col items-center p-3 rounded-xl shadow-md m-2 w-full md:w-1/4" style={{ backgroundColor: colors.primaryPurple }}>
-                    <h4 className="text-md font-semibold text-center" style={{ color: colors.white }}>{title}</h4>
-                    <p className="text-2xl font-bold mt-1" style={{ color: colors.secondaryGreen }}>{rate}</p>
-                </div>
-            );
-
-            return (
-                <div className="min-h-screen p-6" style={{ backgroundColor: colors.darkBackground }}>
-                    <div className="max-w-7xl mx-auto">
-                        {/* Cabeçalho */}
-                        <header className="flex items-center py-6 relative">
-                            <img
-                                src="https://taimeagencia.com.br/wp-content/webp-express/webp-images/uploads/2024/11/agencia-marketing-taime-aceleradora-marketing-vendas-estrategias-redes-sociais-videos-profissionais-campanha-anuncios-online-google-instagram-logo2.png.webp"
-                                alt="Taime Agência Logo"
-                                className="h-12 w-auto"
-                                onError={(e) => { e.target.src = 'https://placehold.co/150x50/201e26/28e7c5?text=TAIME_AGENCIA_LOGO'; }}
-                            />
-                            <h1 className="text-4xl font-bold text-center absolute left-1/2 transform -translate-x-1/2 whitespace-nowrap" style={{ color: colors.white }}>
-                                Dashboard de Prospecção Ativa
-                            </h1>
-                        </header>
-
-                        {/* Status */}
-                        {(filterStatus || isProcessing) && (
-                            <div className="text-center mb-4 p-3 rounded-lg flex items-center justify-center" style={{ backgroundColor: colors.primaryPurple }}>
-                                {isProcessing && <div className="loading-spinner"></div>}
-                                <p style={{ color: colors.secondaryGreen }}>
-                                    {isProcessing ? 'Processando...' : filterStatus}
-                                </p>
-                            </div>
-                        )}
-
-                        {/* Última atualização */}
-                        {lastUpdate && (
-                            <div className="text-center mb-4">
-                                <p className="text-sm" style={{ color: colors.grayText }}>
-                                    Última atualização: {lastUpdate}
-                                </p>
-                            </div>
-                        )}
-
-                        {/* Filtros Rápidos */}
-                        <section className="text-center mb-6">
-                            <h3 className="text-lg font-semibold mb-3" style={{ color: colors.white }}>Filtros Rápidos</h3>
-                            <div className="flex flex-wrap justify-center">
-                                {['thisMonth', 'lastMonth', 'june2025', 'firstHalf', 'secondHalf', 'allData'].map((filterKey) => {
-                                    const labels = {
-                                        thisMonth: 'Este Mês',
-                                        lastMonth: 'Mês Passado',
-                                        june2025: 'Junho 2025',
-                                        firstHalf: '1ª Quinzena Jun',
-                                        secondHalf: '2ª Quinzena Jun',
-                                        allData: 'Todos os Dados'
-                                    };
-                                    
-                                    return (
-                                        <button
-                                            key={filterKey}
-                                            onClick={() => applyQuickFilter(filterKey)}
-                                            disabled={isProcessing || !firebaseReady}
-                                            className="quick-filter-btn disabled:opacity-50"
-                                            style={{ 
-                                                backgroundColor: colors.secondaryGreen, 
-                                                color: colors.darkBackground 
-                                            }}
-                                        >
-                                            {labels[filterKey]}
-                                        </button>
-                                    );
-                                })}
-                            </div>
-                        </section>
-
-                        {/* Filtro customizado */}
-                        <section className="flex flex-col md:flex-row justify-center items-center my-6 space-y-2 md:space-y-0 md:space-x-4">
-                            <div className="flex items-center space-x-2">
-                                <label style={{ color: colors.white }}>De:</label>
-                                <input
-                                    type="date"
-                                    value={startDate}
-                                    onChange={(e) => setStartDate(e.target.value)}
-                                    disabled={isProcessing || !firebaseReady}
-                                    className="p-2 text-sm rounded-lg bg-gray-800 border-2 border-gray-700 focus:outline-none focus:border-purple-600 disabled:opacity-50"
-                                    style={{ color: colors.white }}
-                                />
-                                
-                                <label style={{ color: colors.white }}>Até:</label>
-                                <input
-                                    type="date"
-                                    value={endDate}
-                                    onChange={(e) => setEndDate(e.target.value)}
-                                    disabled={isProcessing || !firebaseReady}
-                                    className="p-2 text-sm rounded-lg bg-gray-800 border-2 border-gray-700 focus:outline-none focus:border-purple-600 disabled:opacity-50"
-                                    style={{ color: colors.white }}
-                                />
-                            </div>
-                            
-                            <button
-                                onClick={applyDateFilter}
-                                disabled={isProcessing || !firebaseReady}
-                                className="px-4 py-2 rounded-lg font-semibold bg-gradient-to-r from-purple-600 to-indigo-600 text-white shadow-lg hover:shadow-xl transition-all duration-300 transform hover:scale-105 text-sm disabled:opacity-50 flex items-center"
-                            >
-                                {isProcessing && <div className="loading-spinner"></div>}
-                                Aplicar Filtro
-                            </button>
-                        </section>
-
-                        {/* Funil de Vendas */}
-                        <section className="my-8">
-                            <div className="flex flex-wrap md:flex-nowrap justify-center items-center">
-                                <FunnelCard title="Leads" value={funnelData.leads} bgColor={colors.primaryPurple} />
-                                <span className="text-4xl mx-2 md:mx-4 hidden md:block" style={{ color: colors.secondaryGreen }}>→</span>
-                                <FunnelCard title="Qualificação" value={funnelData.qualification} bgColor={colors.primaryPurple} />
-                                <span className="text-4xl mx-2 md:mx-4 hidden md:block" style={{ color: colors.secondaryGreen }}>→</span>
-                                <FunnelCard title="Reunião" value={funnelData.meeting} bgColor={colors.primaryPurple} />
-                                <span className="text-4xl mx-2 md:mx-4 hidden md:block" style={{ color: colors.secondaryGreen }}>→</span>
-                                <FunnelCard title="Proposta" value={funnelData.proposal} bgColor={colors.primaryPurple} />
-                                <span className="text-4xl mx-2 md:mx-4 hidden md:block" style={{ color: colors.secondaryGreen }}>→</span>
-                                <FunnelCard title="Negócio Fechado" value={funnelData.closedBusiness} bgColor={colors.secondaryGreen} />
-                            </div>
-                        </section>
-
-                        {/* Taxas de Conversão */}
-                        <section className="my-8">
-                            <h2 className="text-2xl font-semibold text-center mb-6" style={{ color: colors.white }}>Taxas de Conversão</h2>
-                            <div className="grid grid-cols-1 md:grid-cols-3 gap-4 max-w-4xl mx-auto">
-                                <ConversionRateCard title="Taxa de Fechamento Total" rate={conversionRates.overall} />
-                                <ConversionRateCard title="Leads → Qualificação" rate={conversionRates.leadsToQualification} />
-                                <ConversionRateCard title="Qualificação → Reunião" rate={conversionRates.qualificationToMeeting} />
-                            </div>
-                        </section>
-                    </div>
-                </div>
-            );
+    <!-- Firebase CDN -->
+    <script type="module">
+        import { initializeApp } from "https://www.gstatic.com/firebasejs/10.0.0/firebase-app.js";
+        import { getAuth, signInAnonymously, signInWithCustomToken, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/10.0.0/firebase-auth.js";
+        import { getFirestore, collection, query, getDocs } from "https://www.gstatic.com/firebasejs/10.0.0/firebase-firestore.js";
+        
+        // Define a global variable to store the firebase instances so React components can access them
+        window.firebaseInstances = {};
+        
+        // Configuração do Firebase
+        const firebaseConfig = {
+    apiKey: "AIzaSyC4TCs_jnYgbLautTgKHZloeMnV3RuVKrM",
+    authDomain: "dashboardprospeccaooficial.firebaseapp.com",
+    projectId: "dashboardprospeccaooficial",
+    storageBucket: "dashboardprospeccaooficial.appspot.com",
+    messagingSenderId: "878548277840",
+    appId: "1:878548277840:web:8d83dd723cdcfc975e8f55"
+};
         };
 
+        // Inicializa Firebase
+        const app = initializeApp(firebaseConfig);
+        const db = getFirestore(app);
+        const auth = getAuth(app);
+
+        // Store instances globally for React component access
+        window.firebaseInstances.db = db;
+        window.firebaseInstances.auth = auth;
+        window.firebaseInstances.getFirestore = getFirestore;
+        window.firebaseInstances.collection = collection;
+        window.firebaseInstances.query = query;
+        window.firebaseInstances.getDocs = getDocs;
+        window.firebaseInstances.onAuthStateChanged = onAuthStateChanged;
+        window.firebaseInstances.signInAnonymously = signInAnonymously;
+        window.firebaseInstances.signInWithCustomToken = signInWithCustomToken;
+    </script>
+    <!-- D3.js CDN -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/d3/7.8.5/d3.min.js"></script>
+
+    <script type="text/babel">
+        const { useState, useEffect, useCallback, useRef } = React;
+
+        // Definição das cores da Taime Agência
+        const taimeColors = {
+          darkBackground: '#201e26',
+          primaryPurple: '#6843e1',
+          secondaryGreen: '#28e7c5',
+          lightText: '#f9fafb',
+          mediumGray: '#9ca3af',
+          darkGray: '#374151',
+        };
+
+        // URL do logo da Taime Agência
+        const taimeLogoUrl = "https://taimeagencia.com.br/wp-content/webp-express/webp-images/uploads/2024/11/agencia-marketing-taime-aceleradora-marketing-vendas-estrategias-redes-sociais-videos-profissionais-campanha-anuncios-online-google-instagram-logo2.png.webp";
+
+        // Componente para o Gráfico de Funil de Conversão
+        const ConversionFunnelChart = ({ data }) => {
+          const svgRef = useRef();
+
+          useEffect(() => {
+            if (!data || data.Leads === 0) return;
+
+            const stages = ['Leads', 'Qualificação', 'Reunião', 'Proposta', 'Negócio Fechado'];
+            const values = stages.map(stage => {
+              if (stage === 'Qualificação') return data.Qualificacao;
+              if (stage === 'Reunião') return data.Reuniao;
+              if (stage === 'Negócio Fechado') return data.NegocioFechado;
+              return data[stage];
+            });
+
+            const margin = { top: 20, right: 30, bottom: 40, left: 50 };
+            const width = Math.min(600, window.innerWidth * 0.8) - margin.left - margin.right;
+            const height = 300 - margin.top - margin.bottom;
+
+            d3.select(svgRef.current).selectAll("*").remove();
+
+            const svg = d3.select(svgRef.current)
+              .attr("width", width + margin.left + margin.right)
+              .attr("height", height + margin.top + margin.bottom)
+              .append("g")
+              .attr("transform", `translate(${margin.left},${margin.top})`);
+
+            const xScale = d3.scaleBand()
+              .domain(stages)
+              .range([0, width])
+              .padding(0.3);
+
+            const yScale = d3.scaleLinear()
+              .domain([0, d3.max(values) * 1.1])
+              .range([height, 0]);
+
+            svg.selectAll(".bar")
+              .data(values)
+              .enter()
+              .append("rect")
+              .attr("class", "bar")
+              .attr("x", (d, i) => xScale(stages[i]))
+              .attr("y", d => yScale(d))
+              .attr("width", xScale.bandwidth())
+              .attr("height", d => height - yScale(d))
+              .attr("fill", taimeColors.primaryPurple)
+              .attr("rx", 5)
+              .attr("ry", 5);
+
+            svg.selectAll(".bar-label")
+              .data(values)
+              .enter()
+              .append("text")
+              .attr("class", "bar-label")
+              .attr("x", (d, i) => xScale(stages[i]) + xScale.bandwidth() / 2)
+              .attr("y", d => yScale(d) - 5)
+              .attr("text-anchor", "middle")
+              .attr("fill", taimeColors.lightText)
+              .style("font-size", "12px")
+              .text(d => d);
+
+            svg.append("g")
+              .attr("transform", `translate(0,${height})`)
+              .call(d3.axisBottom(xScale))
+              .selectAll("text")
+              .attr("fill", taimeColors.lightText);
+
+            svg.append("g")
+              .call(d3.axisLeft(yScale))
+              .selectAll("text")
+              .attr("fill", taimeColors.lightText);
+
+            svg.append("text")
+              .attr("transform", "rotate(-90)")
+              .attr("y", -margin.left + 10)
+              .attr("x", -height / 2)
+              .attr("dy", "1em")
+              .style("text-anchor", "middle")
+              .attr("fill", taimeColors.lightText)
+              .text("Quantidade");
+
+          }, [data]);
+
+          return (
+            <div className="flex justify-center mb-8">
+              <svg ref={svgRef}></svg>
+            </div>
+          );
+        };
+
+        // Componente para o Gráfico de Origem de Leads
+        const OriginConversionChart = ({ data }) => {
+          const svgRef = useRef();
+
+          useEffect(() => {
+            if (!data || Object.keys(data.origens).length === 0) return;
+
+            const originsData = Object.entries(data.origens).map(([name, values]) => ({
+              name,
+              leads: values.leads,
+              closed: values.negocioFechado,
+              conversion: values.leads > 0 ? (values.negocioFechado / values.leads) * 100 : 0
+            }));
+
+            const margin = { top: 20, right: 30, bottom: 40, left: 50 };
+            const width = Math.min(600, window.innerWidth * 0.8) - margin.left - margin.right;
+            const height = 300 - margin.top - margin.bottom;
+
+            d3.select(svgRef.current).selectAll("*").remove();
+
+            const svg = d3.select(svgRef.current)
+              .attr("width", width + margin.left + margin.right)
+              .attr("height", height + margin.top + margin.bottom)
+              .append("g")
+              .attr("transform", `translate(${margin.left},${margin.top})`);
+
+            const xScale = d3.scaleBand()
+              .domain(originsData.map(d => d.name))
+              .range([0, width])
+              .padding(0.3);
+
+            const yScale = d3.scaleLinear()
+              .domain([0, d3.max(originsData, d => Math.max(d.leads, d.closed)) * 1.1])
+              .range([height, 0]);
+
+            // Barras para Leads
+            svg.selectAll(".bar-leads")
+              .data(originsData)
+              .enter()
+              .append("rect")
+              .attr("class", "bar-leads")
+              .attr("x", d => xScale(d.name) - (xScale.bandwidth() / 4))
+              .attr("y", d => yScale(d.leads))
+              .attr("width", xScale.bandwidth() / 2)
+              .attr("height", d => height - yScale(d.leads))
+              .attr("fill", taimeColors.primaryPurple)
+              .attr("rx", 3)
+              .attr("ry", 3);
+
+            // Barras para Negócios Fechados
+            svg.selectAll(".bar-closed")
+              .data(originsData)
+              .enter()
+              .append("rect")
+              .attr("class", "bar-closed")
+              .attr("x", d => xScale(d.name) + (xScale.bandwidth() / 4))
+              .attr("y", d => yScale(d.closed))
+              .attr("width", xScale.bandwidth() / 2)
+              .attr("height", d => height - yScale(d.closed))
+              .attr("fill", taimeColors.secondaryGreen)
+              .attr("rx", 3)
+              .attr("ry", 3);
+
+            // Valores nas barras (Leads)
+            svg.selectAll(".label-leads")
+              .data(originsData)
+              .enter()
+              .append("text")
+              .attr("x", d => xScale(d.name) - (xScale.bandwidth() / 4) + xScale.bandwidth() / 4)
+              .attr("y", d => yScale(d.leads) - 5)
+              .attr("text-anchor", "middle")
+              .attr("fill", taimeColors.lightText)
+              .style("font-size", "10px")
+              .text(d => d.leads);
+
+            // Valores nas barras (Negócios Fechados)
+            svg.selectAll(".label-closed")
+              .data(originsData)
+              .enter()
+              .append("text")
+              .attr("x", d => xScale(d.name) + (xScale.bandwidth() / 4) + xScale.bandwidth() / 4)
+              .attr("y", d => yScale(d.closed) - 5)
+              .attr("text-anchor", "middle")
+              .attr("fill", taimeColors.lightText)
+              .style("font-size", "10px")
+              .text(d => d.closed);
+
+            // Eixo X
+            svg.append("g")
+              .attr("transform", `translate(0,${height})`)
+              .call(d3.axisBottom(xScale))
+              .selectAll("text")
+              .attr("fill", taimeColors.lightText);
+
+            // Eixo Y
+            svg.append("g")
+              .call(d3.axisLeft(yScale))
+              .selectAll("text")
+              .attr("fill", taimeColors.lightText);
+
+            // Legenda
+            svg.append("rect").attr("x", width - 120).attr("y", 0).attr("width", 10).attr("height", 10).attr("fill", taimeColors.primaryPurple).attr("rx",2).attr("ry",2);
+            svg.append("text").attr("x", width - 105).attr("y", 9).text("Leads").attr("fill", taimeColors.lightText).style("font-size", "10px");
+            svg.append("rect").attr("x", width - 120).attr("y", 20).attr("width", 10).attr("height", 10).attr("fill", taimeColors.secondaryGreen).attr("rx",2).attr("ry",2);
+            svg.append("text").attr("x", width - 105).attr("y", 29).text("Fechados").attr("fill", taimeColors.lightText).style("font-size", "10px");
+
+
+          }, [data]);
+
+          return (
+            <div className="flex justify-center mb-8">
+              <svg ref={svgRef}></svg>
+            </div>
+          );
+        };
+
+        function App() {
+          const [userId, setUserId] = useState(null);
+          const [loadingFirebase, setLoadingFirebase] = useState(true);
+          const [dashboardData, setDashboardData] = useState([]);
+          const [startDate, setStartDate] = useState(new Date().toISOString().split('T')[0]);
+          const [endDate, setEndDate] = useState(new Date().toISOString().split('T')[0]);
+
+          // Get the app ID from the global variable (provided by Canvas)
+          const appId = typeof __app_id !== 'undefined' ? __app_id : 'default-app-id';
+
+          useEffect(() => {
+            // Autenticação Firebase
+            const signInUser = async () => {
+              try {
+                if (typeof __initial_auth_token !== 'undefined') {
+                  try {
+                    await window.firebaseInstances.signInWithCustomToken(window.firebaseInstances.auth, window.__initial_auth_token);
+                  } catch (tokenError) {
+                    console.warn("Erro ao autenticar com token personalizado, tentando autenticação anônima:", tokenError);
+                    await window.firebaseInstances.signInAnonymously(window.firebaseInstances.auth);
+                  }
+                } else {
+                  await window.firebaseInstances.signInAnonymously(window.firebaseInstances.auth);
+                }
+              } catch (authError) {
+                console.error("Erro ao autenticar Firebase:", authError);
+              } finally {
+                setLoadingFirebase(false);
+              }
+            };
+
+            const unsubscribe = window.firebaseInstances.onAuthStateChanged(window.firebaseInstances.auth, (user) => {
+              if (user) {
+                setUserId(user.uid);
+              } else {
+                setUserId(null);
+              }
+              setLoadingFirebase(false);
+            });
+
+            signInUser();
+
+            return () => unsubscribe(); // Cleanup on unmount
+          }, []);
+
+          const fetchData = useCallback(async () => {
+            if (!window.firebaseInstances.db || !userId) {
+              console.log("Firebase não inicializado ou usuário não autenticado.");
+              return;
+            }
+
+            setDashboardData([]); // Clear previous data
+
+            try {
+              const collectionPath = `prospeccao_diaria`;
+              const q = window.firebaseInstances.query(window.firebaseInstances.collection(window.firebaseInstances.db, collectionPath));
+              const querySnapshot = await window.firebaseInstances.getDocs(q);
+
+              let aggregatedData = {
+                Leads: 0, Qualificacao: 0, Reuniao: 0, Proposta: 0, NegocioFechado: 0,
+                origens: { "Email": { leads: 0, qualificacao: 0, reuniao: 0, proposta: 0, negocioFechado: 0 },
+                           "Lista": { leads: 0, qualificacao: 0, reuniao: 0, proposta: 0, negocioFechado: 0 },
+                           "LinkedIn": { leads: 0, qualificacao: 0, reuniao: 0, proposta: 0, negocioFechado: 0 },
+                           "Outros": { leads: 0, qualificacao: 0, reuniao: 0, proposta: 0, negocioFechado: 0 }
+                         }
+              };
+
+              const selectedStartDate = new Date(startDate);
+              selectedStartDate.setHours(0, 0, 0, 0);
+              const selectedEndDate = new Date(endDate);
+              selectedEndDate.setHours(23, 59, 59, 999);
+
+              querySnapshot.forEach((doc) => {
+                const data = doc.data();
+                const docDate = new Date(data.date);
+                docDate.setHours(0, 0, 0, 0);
+
+                if (docDate >= selectedStartDate && docDate <= selectedEndDate) {
+                  aggregatedData.Leads += data.Leads || 0;
+                  aggregatedData.Qualificacao += data.Qualificacao || 0;
+                  aggregatedData.Reuniao += data.Reuniao || 0;
+                  aggregatedData.Proposta += data.Proposta || 0;
+                  aggregatedData.NegocioFechado += data.NegocioFechado || 0;
+
+                  if (data.origens) {
+                    for (const originKey in data.origens) {
+                      if (aggregatedData.origens[originKey]) {
+                        aggregatedData.origens[originKey].leads += data.origens[originKey].leads || 0;
+                        aggregatedData.origens[originKey].qualificacao += data.origens[originKey].qualificacao || 0;
+                        aggregatedData.origens[originKey].reuniao += data.origens[originKey].reuniao || 0;
+                        aggregatedData.origens[originKey].proposta += data.origens[originKey].proposta || 0;
+                        aggregatedData.origens[originKey].negocioFechado += data.origens[originKey].negocioFechado || 0;
+                      }
+                    }
+                  }
+                }
+              });
+              setDashboardData([aggregatedData]);
+            } catch (error) {
+              console.error("Erro ao buscar dados do Firestore:", error);
+            }
+          }, [userId, startDate, endDate, appId]);
+
+          useEffect(() => {
+            if (userId) {
+              fetchData();
+            }
+          }, [userId, fetchData]);
+
+          const handleResetFilter = () => {
+            const today = new Date().toISOString().split('T')[0];
+            setStartDate(today);
+            setEndDate(today);
+          };
+
+          if (loadingFirebase) {
+            return (
+              <div className="flex items-center justify-center min-h-screen" style={{ backgroundColor: taimeColors.darkBackground, color: taimeColors.lightText }}>
+                <p className="text-xl">Carregando Firebase e autenticando...</p>
+              </div>
+            );
+          }
+
+          const data = dashboardData[0] || { Leads: 0, Qualificacao: 0, Reuniao: 0, Proposta: 0, NegocioFechado: 0, origens: {} };
+
+          const calculateConversion = (from, to) => {
+            if (from === 0) return '0.00%';
+            return ((to / from) * 100).toFixed(2) + '%';
+          };
+
+          const calculateConversionOverall = (stage) => {
+            if (data.Leads === 0) return '0.00%';
+            return ((data[stage] / data.Leads) * 100).toFixed(2) + '%';
+          };
+
+          const calculateOriginConversion = (originData) => {
+            if (originData.leads === 0) return '0.00%';
+            return ((originData.negocioFechado / originData.leads) * 100).toFixed(2) + '%';
+          };
+
+          const getAnalysis = () => {
+            const leadsToQualificacao = data.Leads > 0 ? (data.Qualificacao / data.Leads) : 0;
+            const qualificacaoToReuniao = data.Qualificacao > 0 ? (data.Reuniao / data.Qualificacao) : 0;
+            const reuniaoToProposta = data.Reuniao > 0 ? (data.Proposta / data.Reuniao) : 0;
+            const propostaToFechado = data.Proposta > 0 ? (data.NegocioFechado / data.Proposta) : 0;
+
+            let analysis = [];
+
+            analysis.push("## Análise e Sugestões de Melhoria\n\n");
+
+            if (data.Leads === 0) {
+              analysis.push("Atualmente não há dados de leads para análise. Certifique-se de que a integração com o Sheets via n8n está enviando os dados corretamente ao Firebase.\n");
+              return analysis.join('');
+            }
+
+            analysis.push("Com base nos seus dados atuais:\n");
+
+            if (leadsToQualificacao < 0.5) { // Limite para baixa conversão (exemplo: menos de 50%)
+              analysis.push(`- **Leads para Qualificação (${calculateConversion(data.Leads, data.Qualificacao)}):** A taxa de conversão desta etapa está **baixa**. Isso pode indicar que a abordagem inicial com os leads precisa ser revisada. Considere otimizar as mensagens de primeiro contato, personalizar a comunicação e focar em entender as dores do lead antes de apresentar soluções.\n`);
+            } else if (leadsToQualificacao >= 0.75) {
+                analysis.push(`- **Leads para Qualificação (${calculateConversion(data.Leads, data.Qualificacao)}):** A taxa de conversão desta etapa está **excelente**. Mantenha a qualidade da sua abordagem inicial e continue aprimorando a qualificação.\n`);
+            } else {
+                analysis.push(`- **Leads para Qualificação (${calculateConversion(data.Leads, data.Qualificacao)}):** A taxa de conversão desta etapa está **boa**. Continue monitorando e buscando melhorias incrementais na sua abordagem inicial.\n`);
+            }
+
+            if (qualificacaoToReuniao < 0.6) { // Limite para baixa conversão (exemplo: menos de 60%)
+              analysis.push(`- **Qualificação para Reunião (${calculateConversion(data.Qualificacao, data.Reuniao)}):** A conversão de leads qualificados para reuniões agendadas parece **requer atenção**. O script de agendamento de reuniões pode precisar de ajustes para ser mais persuasivo e destacar o valor do encontro. Certifique-se de que os qualificadores estão sendo eficazes em identificar leads com real potencial.\n`);
+            } else if (qualificacaoToReuniao >= 0.8) {
+                analysis.push(`- **Qualificação para Reunião (${calculateConversion(data.Qualificacao, data.Reuniao)}):** A taxa de agendamento de reuniões com leads qualificados está **forte**. Isso demonstra um bom alinhamento entre qualificação e a proposta de valor da reunião.\n`);
+            } else {
+                analysis.push(`- **Qualificação para Reunião (${calculateConversion(data.Qualificacao, data.Reuniao)}):** A taxa de agendamento de reuniões está **satisfatória**. Revise periodicamente o script para otimizações pontuais.\n`);
+            }
+
+            if (reuniaoToProposta < 0.7) { // Limite para baixa conversão (exemplo: menos de 70%)
+              analysis.push(`- **Reunião para Proposta (${calculateConversion(data.Reuniao, data.Proposta)}):** Se a taxa de reuniões para propostas está **baixa**, talvez seja necessário aprimorar o script da reunião, a capacidade de identificar as necessidades do cliente durante a conversa e a apresentação da solução. Certifique-se de que as propostas estão sendo geradas com base em um entendimento aprofundado.\n`);
+            } else if (reuniaoToProposta >= 0.85) {
+                analysis.push(`- **Reunião para Proposta (${calculateConversion(data.Reuniao, data.Proposta)}):** A conversão de reuniões para propostas é **muito boa**. Isso indica que as reuniões são eficazes em levar o cliente ao próximo passo.\n`);
+            } else {
+                analysis.push(`- **Reunião para Proposta (${calculateConversion(data.Reuniao, data.Proposta)}):** A conversão de reuniões para propostas está **decente**. Mantenha o foco em apresentar soluções alinhadas às necessidades do cliente.\n`);
+            }
+
+            if (propostaToFechado < 0.4) { // Limite para baixa conversão (exemplo: menos de 40%)
+              analysis.push(`- **Proposta para Negócio Fechado (${calculateConversion(data.Proposta, data.NegocioFechado)}):** Uma taxa de fechamento de propostas **baixa** pode sugerir que o processo de negociação ou o próprio conteúdo da proposta precisam ser mais persuasivos. Revise objeções comuns, melhore a comunicação de valor e certifique-se de que a proposta é competitiva e clara.\n`);
+            } else if (propostaToFechado >= 0.6) {
+                analysis.push(`- **Proposta para Negócio Fechado (${calculateConversion(data.Proposta, data.NegocioFechado)}):** A taxa de fechamento de propostas é **alta**, demonstrando grande eficácia na negociação e no valor percebido das suas ofertas.\n`);
+            } else {
+                analysis.push(`- **Proposta para Negócio Fechado (${calculateConversion(data.Proposta, data.NegocioFechado)}):** A taxa de fechamento de propostas é **razoável**. Busque refinar a negociação e o acompanhamento pós-proposta.\n`);
+            }
+
+            // Análise dos canais de origem
+            let bestOrigin = null;
+            let highestConversion = -1;
+            let worstOrigin = null;
+            let lowestConversion = 101; // Max percentage + 1
+
+            for (const origin in data.origens) {
+              const originConv = data.origens[origin].leads > 0 ? (data.origens[origin].negocioFechado / data.origens[origin].leads) * 100 : 0;
+              if (originConv > highestConversion) {
+                highestConversion = originConv;
+                bestOrigin = origin;
+              }
+              if (originConv < lowestConversion) {
+                lowestConversion = originConv;
+                worstOrigin = origin;
+              }
+            }
+
+            if (bestOrigin && highestConversion > 0) {
+              analysis.push(`\n- **Canais de Origem:** O canal **${bestOrigin}** mostra a maior taxa de conversão final (${highestConversion.toFixed(2)}%). Invista mais recursos e esforços neste canal. O canal **${worstOrigin}** tem a menor taxa (${lowestConversion.toFixed(2)}%), o que pode indicar a necessidade de reavaliar a estratégia para este canal ou dedicar mais tempo à qualificação de leads vindos dele.\n`);
+            }
+
+            analysis.push("\n### Próximos Passos:\n");
+            analysis.push("- **Otimização Contínua:** Monitore constantemente essas métricas para identificar gargalos rapidamente.\n");
+            analysis.push("- **Feedback Loop:** Colete feedback da equipe de vendas sobre os desafios em cada etapa.\n");
+            analysis.push("- **Testes A/B:** Implemente testes A/B em suas mensagens e scripts para descobrir o que funciona melhor.\n");
+            analysis.push("- **Treinamento:** Invista em treinamento para aprimorar as habilidades da equipe em cada etapa do funil.\n");
+            return analysis.join('');
+          };
+
+
+          return (
+            <div className="min-h-screen font-inter p-4" style={{ backgroundColor: taimeColors.darkBackground, color: taimeColors.lightText }}>
+              {/* Header */}
+              <header className="flex flex-col sm:flex-row items-center justify-between p-4 mb-8 bg-gray-800 rounded-lg shadow-lg">
+                <img src={taimeLogoUrl} alt="Taime Agencia Logo" className="h-12 object-contain mb-4 sm:mb-0 rounded-md" />
+                <h1 className="text-3xl font-bold text-center flex-1" style={{ color: taimeColors.secondaryGreen }}>
+                  Dashboard de Prospecção Ativa
+                </h1>
+                {/* Adiciona um spacer para centralizar o título */}
+                <div className="h-12 w-[150px] mb-4 sm:mb-0"></div> {/* Largura aproximada do logo */}
+              </header>
+
+              {/* Filter Section */}
+              <section className="mb-8 p-6 bg-gray-800 rounded-lg shadow-md flex flex-col md:flex-row items-center justify-center gap-x-1 space-y-4 md:space-y-0">
+                <div className="flex items-center gap-x-1">
+                  <label htmlFor="startDate" className="font-semibold">De:</label>
+                  <input
+                    type="date"
+                    id="startDate"
+                    value={startDate}
+                    onChange={(e) => setStartDate(e.target.value)}
+                    className="p-2 rounded-md bg-gray-700 text-white focus:outline-none focus:ring-2"
+                    style={{ borderColor: taimeColors.primaryPurple, focusRingColor: taimeColors.primaryPurple }}
+                  />
+                </div>
+                <div className="flex items-center gap-x-1">
+                  <label htmlFor="endDate" className="font-semibold">A:</label>
+                  <input
+                    type="date"
+                    id="endDate"
+                    value={endDate}
+                    onChange={(e) => setEndDate(e.target.value)}
+                    className="p-2 rounded-md bg-gray-700 text-white focus:outline-none focus:ring-2"
+                    style={{ borderColor: taimeColors.primaryPurple, focusRingColor: taimeColors.primaryPurple }}
+                  />
+                </div>
+                <button
+                  onClick={fetchData}
+                  className="px-6 py-2 rounded-lg font-bold transition duration-300 ease-in-out transform hover:scale-105 shadow-lg"
+                  style={{ backgroundColor: taimeColors.primaryPurple, color: taimeColors.lightText, boxShadow: `0 4px 15px -5px ${taimeColors.primaryPurple}` }}
+                >
+                  Aplicar Filtro
+                </button>
+                <button
+                  onClick={handleResetFilter}
+                  className="px-6 py-2 rounded-lg font-bold transition duration-300 ease-in-out transform hover:scale-105 shadow-lg"
+                  style={{ backgroundColor: taimeColors.darkGray, color: taimeColors.lightText, boxShadow: `0 4px 15px -5px ${taimeColors.darkGray}` }}
+                >
+                  Resetar Filtro
+                </button>
+              </section>
+
+              {/* Conversion Stages Dashboard */}
+              <section className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-6 mb-8 justify-items-center">
+                {['Leads', 'Qualificação', 'Reunião', 'Proposta', 'Negócio Fechado'].map((stage, index, array) => (
+                  <div key={stage} className="p-6 bg-gray-800 rounded-lg shadow-md text-center flex flex-col justify-between w-full max-w-xs" style={{ borderBottom: `4px solid ${taimeColors.secondaryGreen}` }}>
+                    <h2 className="text-xl font-semibold mb-2" style={{ color: taimeColors.primaryPurple }}>{stage}</h2>
+                    <p className="text-4xl font-bold mb-4" style={{ color: taimeColors.lightText }}>{
+                      stage === 'Qualificação' ? data.Qualificacao :
+                      stage === 'Reunião' ? data.Reuniao :
+                      stage === 'Negócio Fechado' ? data.NegocioFechado :
+                      data[stage]
+                    }</p>
+                    {index > 0 && (
+                      <p className="text-md font-medium" style={{ color: taimeColors.mediumGray }}>
+                        Taxa de Conversão: <span style={{ color: taimeColors.secondaryGreen }}>{calculateConversion(
+                          array[index - 1] === 'Qualificação' ? data.Qualificacao :
+                          array[index - 1] === 'Reunião' ? data.Reuniao :
+                          array[index - 1] === 'Negócio Fechado' ? data.NegocioFechado :
+                          data[array[index - 1]],
+                          stage === 'Qualificação' ? data.Qualificacao :
+                          stage === 'Reunião' ? data.Reuniao :
+                          stage === 'Negócio Fechado' ? data.NegocioFechado :
+                          data[stage]
+                        )}</span>
+                      </p>
+                    )}
+                    {index === 0 && (
+                      <p className="text-md font-medium" style={{ color: taimeColors.mediumGray }}>
+                        Taxa de Fechamento Total: <span style={{ color: taimeColors.secondaryGreen }}>{calculateConversionOverall('NegocioFechado')}</span>
+                      </p>
+                    )}
+                  </div>
+                ))}
+              </section>
+
+              {/* Charts Section */}
+              <section className="mb-8 p-6 bg-gray-800 rounded-lg shadow-md">
+                <h2 className="text-2xl font-bold mb-4 text-center" style={{ color: taimeColors.secondaryGreen }}>Visualização de Dados</h2>
+                <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
+                  <div>
+                    <h3 className="text-xl font-semibold mb-4 text-center" style={{ color: taimeColors.primaryPurple }}>Funil de Conversão</h3>
+                    <ConversionFunnelChart data={data} />
+                  </div>
+                  <div>
+                    <h3 className="text-xl font-semibold mb-4 text-center" style={{ color: taimeColors.primaryPurple }}>Conversão por Origem</h3>
+                    <OriginConversionChart data={data} />
+                  </div>
+                </div>
+              </section>
+
+              {/* Lead Origin Table */}
+              <section className="mb-8 p-6 bg-gray-800 rounded-lg shadow-md">
+                <h2 className="text-2xl font-bold mb-4 text-center" style={{ color: taimeColors.secondaryGreen }}>Leads por Origem e Conversão</h2>
+                <div className="overflow-x-auto">
+                  <table className="min-w-full bg-gray-700 rounded-lg overflow-hidden">
+                    <thead>
+                      <tr className="bg-gray-600" style={{ color: taimeColors.lightText }}>
+                        <th className="py-3 px-4 text-left font-semibold">Origem</th>
+                        <th className="py-3 px-4 text-left font-semibold">Leads</th>
+                        <th className="py-3 px-4 text-left font-semibold">Negócios Fechados</th>
+                        <th className="py-3 px-4 text-left font-semibold">Taxa de Conversão Final</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {Object.entries(data.origens).map(([origin, originData]) => (
+                        <tr key={origin} className="border-b border-gray-600 hover:bg-gray-600 transition duration-150 ease-in-out">
+                          <td className="py-3 px-4" style={{ color: taimeColors.lightText }}>{origin}</td>
+                          <td className="py-3 px-4" style={{ color: taimeColors.lightText }}>{originData.leads}</td>
+                          <td className="py-3 px-4" style={{ color: taimeColors.lightText }}>{originData.negocioFechado}</td>
+                          <td className="py-3 px-4" style={{ color: taimeColors.secondaryGreen }}>{calculateOriginConversion(originData)}</td>
+                        </tr>
+                      ))}
+                      {Object.keys(data.origens).length === 0 && (
+                        <tr>
+                          <td colSpan="4" className="py-6 px-4 text-center text-gray-400">
+                            Nenhum dado de origem disponível para o período selecionado.
+                          </td>
+                        </tr>
+                      )}
+                    </tbody>
+                  </table>
+                </div>
+              </section>
+
+              {/* Analysis Section */}
+              <section className="p-6 bg-gray-800 rounded-lg shadow-md">
+                <h2 className="text-2xl font-bold mb-4 text-center" style={{ color: taimeColors.secondaryGreen }}>Análise e Sugestões</h2>
+                <div className="prose prose-invert max-w-none text-gray-300" style={{ color: taimeColors.lightText }}>
+                  {/* Render markdown analysis */}
+                  <div dangerouslySetInnerHTML={{ __html: marked.parse(getAnalysis()) }} />
+                </div>
+              </section>
+
+              {/* Footer */}
+              <footer className="mt-8 text-center text-gray-500 text-sm">
+                <p>&copy; {new Date().getFullYear()} Taime Agência. Todos os direitos reservados.</p>
+                <p>Desenvolvido com Firebase, React e Tailwind CSS.</p>
+              </footer>
+            </div>
+          );
+        }
+
+        // Markdown parser (for analysis section)
+        const marked = {
+          parse: (markdown) => {
+            let html = markdown.replace(/^### (.*$)/gim, '<h3>$1</h3>'); // H3
+            html = html.replace(/^## (.*$)/gim, '<h2>$1</h2>'); // H2
+            html = html.replace(/^\* (.*$)/gim, '<li>$1</li>'); // Unordered list
+            html = html.replace(/^\- (.*$)/gim, '<li>$1</li>'); // Unordered list
+            html = html.replace(/\*\*(.*?)\*\*/gim, '<strong>$1</strong>'); // Bold
+            html = html.replace(/\n/g, '<br />'); // New lines
+            return html;
+          }
+        };
+
+        // Render the App component
         const root = ReactDOM.createRoot(document.getElementById('root'));
         root.render(<App />);
+
     </script>
 </body>
 </html>
