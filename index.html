@@ -37,20 +37,19 @@
     <script type="module">
         import { initializeApp } from "https://www.gstatic.com/firebasejs/10.0.0/firebase-app.js";
         import { getAuth, signInAnonymously, signInWithCustomToken, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/10.0.0/firebase-auth.js";
-        import { getFirestore, collection, query, getDocs } from "https://www.gstatic.com/firebasejs/10.0.0/firebase-firestore.js";
+        import { getFirestore, collection, query, getDocs, where, orderBy } from "https://www.gstatic.com/firebasejs/10.0.0/firebase-firestore.js";
         
         // Define a global variable to store the firebase instances so React components can access them
         window.firebaseInstances = {};
         
-        // Configuração do Firebase
+        // Configuração do Firebase - CORRIGIDO: removido o }; extra
         const firebaseConfig = {
-    apiKey: "AIzaSyC4TCs_jnYgbLautTgKHZloeMnV3RuVKrM",
-    authDomain: "dashboardprospeccaooficial.firebaseapp.com",
-    projectId: "dashboardprospeccaooficial",
-    storageBucket: "dashboardprospeccaooficial.appspot.com",
-    messagingSenderId: "878548277840",
-    appId: "1:878548277840:web:8d83dd723cdcfc975e8f55"
-};
+            apiKey: "AIzaSyC4TCs_jnYgbLautTgKHZloeMnV3RuVKrM",
+            authDomain: "dashboardprospeccaooficial.firebaseapp.com",
+            projectId: "dashboardprospeccaooficial",
+            storageBucket: "dashboardprospeccaooficial.appspot.com",
+            messagingSenderId: "878548277840",
+            appId: "1:878548277840:web:8d83dd723cdcfc975e8f55"
         };
 
         // Inicializa Firebase
@@ -58,13 +57,15 @@
         const db = getFirestore(app);
         const auth = getAuth(app);
 
-        // Store instances globally for React component access
+        // Store instances globally for React component access - CORRIGIDO: adicionado where e orderBy
         window.firebaseInstances.db = db;
         window.firebaseInstances.auth = auth;
         window.firebaseInstances.getFirestore = getFirestore;
         window.firebaseInstances.collection = collection;
         window.firebaseInstances.query = query;
         window.firebaseInstances.getDocs = getDocs;
+        window.firebaseInstances.where = where;
+        window.firebaseInstances.orderBy = orderBy;
         window.firebaseInstances.onAuthStateChanged = onAuthStateChanged;
         window.firebaseInstances.signInAnonymously = signInAnonymously;
         window.firebaseInstances.signInWithCustomToken = signInWithCustomToken;
@@ -284,7 +285,6 @@
             svg.append("rect").attr("x", width - 120).attr("y", 20).attr("width", 10).attr("height", 10).attr("fill", taimeColors.secondaryGreen).attr("rx",2).attr("ry",2);
             svg.append("text").attr("x", width - 105).attr("y", 29).text("Fechados").attr("fill", taimeColors.lightText).style("font-size", "10px");
 
-
           }, [data]);
 
           return (
@@ -300,6 +300,7 @@
           const [dashboardData, setDashboardData] = useState([]);
           const [startDate, setStartDate] = useState(new Date().toISOString().split('T')[0]);
           const [endDate, setEndDate] = useState(new Date().toISOString().split('T')[0]);
+          const [loading, setLoading] = useState(false);
 
           // Get the app ID from the global variable (provided by Canvas)
           const appId = typeof __app_id !== 'undefined' ? __app_id : 'default-app-id';
@@ -345,20 +346,38 @@
               return;
             }
 
+            setLoading(true);
             setDashboardData([]); // Clear previous data
 
             try {
               const collectionPath = `prospeccao_diaria`;
-              const q = window.firebaseInstances.query(window.firebaseInstances.collection(window.firebaseInstances.db, collectionPath));
+              
+              // CORRIGIDO: Melhor tratamento da consulta com filtros
+              let q;
+              try {
+                // Tentar consulta com filtros de data
+                q = window.firebaseInstances.query(
+                  window.firebaseInstances.collection(window.firebaseInstances.db, collectionPath),
+                  window.firebaseInstances.where('date', '>=', startDate),
+                  window.firebaseInstances.where('date', '<=', endDate),
+                  window.firebaseInstances.orderBy('date', 'asc')
+                );
+              } catch (queryError) {
+                console.log("Erro na query com filtros, usando consulta simples:", queryError);
+                // Fallback para consulta simples
+                q = window.firebaseInstances.query(window.firebaseInstances.collection(window.firebaseInstances.db, collectionPath));
+              }
+              
               const querySnapshot = await window.firebaseInstances.getDocs(q);
 
               let aggregatedData = {
                 Leads: 0, Qualificacao: 0, Reuniao: 0, Proposta: 0, NegocioFechado: 0,
-                origens: { "Email": { leads: 0, qualificacao: 0, reuniao: 0, proposta: 0, negocioFechado: 0 },
-                           "Lista": { leads: 0, qualificacao: 0, reuniao: 0, proposta: 0, negocioFechado: 0 },
-                           "LinkedIn": { leads: 0, qualificacao: 0, reuniao: 0, proposta: 0, negocioFechado: 0 },
-                           "Outros": { leads: 0, qualificacao: 0, reuniao: 0, proposta: 0, negocioFechado: 0 }
-                         }
+                origens: { 
+                  "Email": { leads: 0, qualificacao: 0, reuniao: 0, proposta: 0, negocioFechado: 0 },
+                  "Lista": { leads: 0, qualificacao: 0, reuniao: 0, proposta: 0, negocioFechado: 0 },
+                  "LinkedIn": { leads: 0, qualificacao: 0, reuniao: 0, proposta: 0, negocioFechado: 0 },
+                  "Outros": { leads: 0, qualificacao: 0, reuniao: 0, proposta: 0, negocioFechado: 0 }
+                }
               };
 
               const selectedStartDate = new Date(startDate);
@@ -368,8 +387,15 @@
 
               querySnapshot.forEach((doc) => {
                 const data = doc.data();
-                const docDate = new Date(data.date);
-                docDate.setHours(0, 0, 0, 0);
+                
+                // CORRIGIDO: Melhor tratamento da data
+                let docDate;
+                if (data.date) {
+                  docDate = typeof data.date === 'string' ? new Date(data.date) : data.date.toDate ? data.date.toDate() : new Date(data.date);
+                  docDate.setHours(0, 0, 0, 0);
+                } else {
+                  return; // Pular documentos sem data
+                }
 
                 if (docDate >= selectedStartDate && docDate <= selectedEndDate) {
                   aggregatedData.Leads += data.Leads || 0;
@@ -394,6 +420,8 @@
               setDashboardData([aggregatedData]);
             } catch (error) {
               console.error("Erro ao buscar dados do Firestore:", error);
+            } finally {
+              setLoading(false);
             }
           }, [userId, startDate, endDate, appId]);
 
@@ -513,7 +541,6 @@
             return analysis.join('');
           };
 
-
           return (
             <div className="min-h-screen font-inter p-4" style={{ backgroundColor: taimeColors.darkBackground, color: taimeColors.lightText }}>
               {/* Header */}
@@ -552,10 +579,11 @@
                 </div>
                 <button
                   onClick={fetchData}
-                  className="px-6 py-2 rounded-lg font-bold transition duration-300 ease-in-out transform hover:scale-105 shadow-lg"
+                  disabled={loading}
+                  className="px-6 py-2 rounded-lg font-bold transition duration-300 ease-in-out transform hover:scale-105 shadow-lg disabled:opacity-50"
                   style={{ backgroundColor: taimeColors.primaryPurple, color: taimeColors.lightText, boxShadow: `0 4px 15px -5px ${taimeColors.primaryPurple}` }}
                 >
-                  Aplicar Filtro
+                  {loading ? 'Carregando...' : 'Aplicar Filtro'}
                 </button>
                 <button
                   onClick={handleResetFilter}
