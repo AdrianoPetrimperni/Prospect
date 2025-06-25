@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Dashboard de Prospecção Ativa - Taime Agência</title>
+    <title>Firebase Explorer - Dashboard</title>
     <link rel="icon" href="data:;base64,iVBORw0KGgo=">
     <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-app-compat.js"></script>
     <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-auth-compat.js"></script>
@@ -13,36 +13,15 @@
     <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
     <script src="https://cdn.tailwindcss.com"></script>
     <style>
-        body, html {
-            margin: 0;
-            padding: 0;
-            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Roboto', sans-serif;
-        }
-        .loading-spinner {
-            border: 2px solid #f3f3f3;
-            border-top: 2px solid #28e7c5;
-            border-radius: 50%;
-            width: 20px;
-            height: 20px;
-            animation: spin 1s linear infinite;
-            margin-right: 8px;
-        }
-        @keyframes spin {
-            0% { transform: rotate(0deg); }
-            100% { transform: rotate(360deg); }
-        }
-        .debug-panel {
-            background: #1a1a1a;
-            border: 1px solid #333;
-            border-radius: 8px;
-            padding: 15px;
-            margin: 10px 0;
-            font-family: monospace;
-            font-size: 12px;
-            color: #00ff00;
-            max-height: 200px;
-            overflow-y: auto;
-        }
+        body, html { margin: 0; padding: 0; font-family: Arial; background: #1a1a1a; color: white; }
+        .container { max-width: 1200px; margin: 0 auto; padding: 20px; }
+        .section { background: #2a2a2a; border-radius: 8px; padding: 20px; margin: 20px 0; }
+        .json-display { background: #000; border: 1px solid #333; border-radius: 5px; padding: 15px; font-family: monospace; font-size: 12px; white-space: pre-wrap; max-height: 300px; overflow-y: auto; }
+        button { background: #007bff; color: white; border: none; padding: 8px 16px; border-radius: 5px; cursor: pointer; margin: 5px; }
+        button:hover { background: #0056b3; }
+        .error { color: #ff6b6b; }
+        .success { color: #51cf66; }
+        .warning { color: #ffd43b; }
     </style>
 </head>
 <body>
@@ -51,38 +30,11 @@
     <script type="text/babel">
         const { useState, useEffect } = React;
 
-        const App = () => {
-            const [funnelData, setFunnelData] = useState({
-                leads: 0,
-                qualification: 0,
-                meeting: 0,
-                proposal: 0,
-                closedBusiness: 0,
-            });
-            const [startDate, setStartDate] = useState('2025-06-01');
-            const [endDate, setEndDate] = useState('2025-06-25');
-            const [filterStatus, setFilterStatus] = useState('');
-            const [isProcessing, setIsProcessing] = useState(false);
+        const FirebaseExplorer = () => {
             const [firebaseReady, setFirebaseReady] = useState(false);
-            const [debugInfo, setDebugInfo] = useState([]);
-            const [showDebug, setShowDebug] = useState(true);
+            const [logs, setLogs] = useState([]);
+            const [collections, setCollections] = useState({});
 
-            const colors = {
-                darkBackground: '#201e26',
-                primaryPurple: '#6843e1',
-                secondaryGreen: '#28e7c5',
-                white: '#ffffff',
-                grayText: '#a0aec0',
-            };
-
-            // Função para adicionar debug
-            const addDebug = (message) => {
-                const timestamp = new Date().toLocaleTimeString();
-                setDebugInfo(prev => [...prev.slice(-10), `[${timestamp}] ${message}`]);
-                console.log(`🔍 ${message}`);
-            };
-
-            // Configuração do Firebase
             const firebaseConfig = {
                 apiKey: "AIzaSyC4TCs_jnYgbLautTgKHZloeMnV3RuVKrM",
                 authDomain: "dashboard-prospeccao-ativa.firebaseapp.com",
@@ -92,392 +44,168 @@
                 appId: "1:878548277840:web:70a7de867f66dbcb5e8f55"
             };
 
-            // Inicialização do Firebase
+            const addLog = (message, type = 'info') => {
+                const timestamp = new Date().toLocaleTimeString();
+                setLogs(prev => [...prev, { timestamp, message, type }]);
+                console.log(`${type.toUpperCase()}: ${message}`);
+            };
+
             useEffect(() => {
                 const initFirebase = async () => {
                     try {
-                        addDebug("Inicializando Firebase...");
-                        
                         if (!firebase.apps.length) {
                             firebase.initializeApp(firebaseConfig);
                         }
                         
                         const auth = firebase.auth();
                         await auth.signInAnonymously();
-                        addDebug("Firebase conectado com sucesso");
-                        
                         setFirebaseReady(true);
-                        
-                        // Listar todos os documentos disponíveis
-                        await listAllDocuments();
+                        addLog("Firebase conectado com sucesso", "success");
                         
                     } catch (error) {
-                        addDebug(`Erro no Firebase: ${error.message}`);
-                        setFilterStatus(`Erro Firebase: ${error.message}`);
+                        addLog(`Erro no Firebase: ${error.message}`, "error");
                     }
                 };
 
                 initFirebase();
             }, []);
 
-            // Função para listar todos os documentos disponíveis
-            const listAllDocuments = async () => {
+            const exploreCollection = async (collectionPath) => {
+                if (!firebaseReady) return;
+
+                addLog(`🔍 Explorando coleção: ${collectionPath}`);
+                
                 try {
                     const db = firebase.firestore();
-                    addDebug("Listando documentos da coleção 'prospeccaoDiaria'...");
+                    const snapshot = await db.collection(collectionPath).get();
                     
-                    const snapshot = await db.collection('prospeccaoDiaria').get();
-                    addDebug(`Encontrados ${snapshot.size} documentos na coleção`);
+                    addLog(`📊 Encontrados ${snapshot.size} documentos em '${collectionPath}'`);
                     
+                    const documents = [];
                     snapshot.forEach(doc => {
                         const data = doc.data();
-                        addDebug(`Documento: ${doc.id} | Leads: ${data.Leads || 0} | Qualificacao: ${data.Qualificacao || 0}`);
+                        documents.push({
+                            id: doc.id,
+                            data: data
+                        });
+                        addLog(`📄 Documento: ${doc.id} | Dados: ${JSON.stringify(data).substring(0, 100)}...`);
                     });
                     
-                    if (snapshot.size > 0) {
-                        // Carregar dados iniciais
-                        await loadDataFromFirebase();
+                    setCollections(prev => ({
+                        ...prev,
+                        [collectionPath]: documents
+                    }));
+                    
+                } catch (error) {
+                    addLog(`❌ Erro ao explorar '${collectionPath}': ${error.message}`, "error");
+                }
+            };
+
+            const exploreNestedPath = async (path) => {
+                if (!firebaseReady) return;
+
+                addLog(`🔍 Explorando path aninhado: ${path}`);
+                
+                try {
+                    const db = firebase.firestore();
+                    const docRef = db.doc(path);
+                    const doc = await docRef.get();
+                    
+                    if (doc.exists) {
+                        addLog(`✅ Documento encontrado em: ${path}`);
+                        addLog(`📄 Dados: ${JSON.stringify(doc.data(), null, 2)}`);
+                        
+                        setCollections(prev => ({
+                            ...prev,
+                            [path]: [{ id: doc.id, data: doc.data() }]
+                        }));
                     } else {
-                        addDebug("NENHUM documento encontrado na coleção!");
-                        setFilterStatus("Nenhum dado encontrado no Firebase");
+                        addLog(`❌ Documento não encontrado em: ${path}`, "warning");
                     }
                     
                 } catch (error) {
-                    addDebug(`Erro ao listar documentos: ${error.message}`);
+                    addLog(`❌ Erro ao acessar '${path}': ${error.message}`, "error");
                 }
             };
 
-            // Função para ler dados diretamente do Firebase
-            const loadDataFromFirebase = async () => {
-                if (!firebaseReady) {
-                    addDebug("Firebase não está pronto");
-                    return;
-                }
-
-                setIsProcessing(true);
-                setFilterStatus('Carregando dados do Firebase...');
-                addDebug(`Filtrando período: ${startDate} até ${endDate}`);
-
-                try {
-                    const db = firebase.firestore();
-                    
-                    // Método 1: Filtro por range de datas
-                    addDebug("Tentando filtro por range de datas...");
-                    let snapshot = await db
-                        .collection('prospeccaoDiaria')
-                        .where('date', '>=', startDate)
-                        .where('date', '<=', endDate)
-                        .get();
-
-                    addDebug(`Método 1 - Encontrados: ${snapshot.size} documentos`);
-
-                    // Se não encontrou nada, tentar método 2: buscar por ID do documento
-                    if (snapshot.size === 0) {
-                        addDebug("Método 1 falhou, tentando método 2...");
-                        
-                        // Gerar lista de datas no período
-                        const dates = [];
-                        const currentDate = new Date(startDate);
-                        const endDateObj = new Date(endDate);
-                        
-                        while (currentDate <= endDateObj) {
-                            dates.push(currentDate.toISOString().split('T')[0]);
-                            currentDate.setDate(currentDate.getDate() + 1);
-                        }
-                        
-                        addDebug(`Buscando documentos específicos: ${dates.join(', ')}`);
-                        
-                        // Buscar cada documento individualmente
-                        const docs = [];
-                        for (const date of dates) {
-                            try {
-                                const doc = await db.collection('prospeccaoDiaria').doc(date).get();
-                                if (doc.exists) {
-                                    docs.push(doc);
-                                    addDebug(`Encontrado documento: ${date}`);
-                                }
-                            } catch (error) {
-                                addDebug(`Erro ao buscar ${date}: ${error.message}`);
-                            }
-                        }
-                        
-                        // Simular snapshot
-                        snapshot = { 
-                            size: docs.length, 
-                            forEach: (callback) => docs.forEach(callback)
-                        };
-                    }
-
-                    // Agregar dados
-                    let totalLeads = 0;
-                    let totalQualificacao = 0;
-                    let totalReuniao = 0;
-                    let totalProposta = 0;
-                    let totalFechado = 0;
-
-                    snapshot.forEach(doc => {
-                        const data = doc.data();
-                        addDebug(`Processando ${doc.id}: L:${data.Leads||0} Q:${data.Qualificacao||0} R:${data.Reuniao||0} P:${data.Proposta||0} F:${data.NegocioFechado||0}`);
-                        
-                        totalLeads += data.Leads || 0;
-                        totalQualificacao += data.Qualificacao || 0;
-                        totalReuniao += data.Reuniao || 0;
-                        totalProposta += data.Proposta || 0;
-                        totalFechado += data.NegocioFechado || 0;
-                    });
-
-                    // Atualizar estado
-                    setFunnelData({
-                        leads: totalLeads,
-                        qualification: totalQualificacao,
-                        meeting: totalReuniao,
-                        proposal: totalProposta,
-                        closedBusiness: totalFechado,
-                    });
-
-                    const resultMessage = `Dados: L:${totalLeads} Q:${totalQualificacao} R:${totalReuniao} P:${totalProposta} F:${totalFechado} (${snapshot.size} docs)`;
-                    addDebug(resultMessage);
-                    setFilterStatus(`${startDate} até ${endDate} - ${resultMessage}`);
-                    setIsProcessing(false);
-
-                } catch (error) {
-                    addDebug(`Erro ao carregar dados: ${error.message}`);
-                    setFilterStatus(`Erro: ${error.message}`);
-                    setIsProcessing(false);
-                }
+            const testSpecificDocument = async (docPath) => {
+                addLog(`🎯 Testando documento específico: ${docPath}`);
+                await exploreNestedPath(docPath);
             };
 
-            // Aplicar filtro de data
-            const applyDateFilter = async () => {
-                if (!startDate || !endDate) {
-                    alert("Por favor, selecione as datas");
-                    return;
-                }
-                
-                addDebug(`Aplicando filtro: ${startDate} até ${endDate}`);
-                await loadDataFromFirebase();
+            const clearLogs = () => {
+                setLogs([]);
+                setCollections({});
             };
-
-            // Filtros rápidos
-            const applyQuickFilter = async (filterKey) => {
-                const today = new Date();
-                const year = today.getFullYear();
-                const month = today.getMonth();
-                
-                const filters = {
-                    today: {
-                        start: today.toISOString().split('T')[0],
-                        end: today.toISOString().split('T')[0],
-                        label: 'Hoje'
-                    },
-                    thisMonth: {
-                        start: new Date(year, month, 1).toISOString().split('T')[0],
-                        end: new Date(year, month + 1, 0).toISOString().split('T')[0],
-                        label: 'Este Mês'
-                    },
-                    june2025: {
-                        start: '2025-06-01',
-                        end: '2025-06-30',
-                        label: 'Junho 2025'
-                    },
-                    specific: {
-                        start: '2025-06-02',
-                        end: '2025-06-02',
-                        label: '02/06/2025'
-                    },
-                    all: {
-                        start: '2020-01-01',
-                        end: '2030-12-31',
-                        label: 'Todos os Dados'
-                    }
-                };
-
-                const filter = filters[filterKey];
-                if (filter) {
-                    addDebug(`Aplicando filtro rápido: ${filter.label}`);
-                    setStartDate(filter.start);
-                    setEndDate(filter.end);
-                    
-                    setTimeout(async () => {
-                        await loadDataFromFirebase();
-                    }, 100);
-                }
-            };
-
-            // Função para calcular taxa de conversão
-            const calculateConversionRate = (from, to) => {
-                if (from === 0) return '0.00%';
-                return ((to / from) * 100).toFixed(2) + '%';
-            };
-
-            const conversionRates = {
-                overall: calculateConversionRate(funnelData.leads, funnelData.closedBusiness),
-                leadsToQual: calculateConversionRate(funnelData.leads, funnelData.qualification),
-                qualToMeeting: calculateConversionRate(funnelData.qualification, funnelData.meeting),
-            };
-
-            // Componentes
-            const FunnelCard = ({ title, value, bgColor }) => (
-                <div className="flex flex-col items-center p-4 rounded-xl shadow-lg mx-1 my-2 w-full md:w-[19%] md:min-w-[150px]" style={{ backgroundColor: bgColor }}>
-                    <h3 className="text-xl font-semibold mb-2" style={{ color: colors.white }}>{title}</h3>
-                    <p className="text-4xl font-bold" style={{ color: colors.white }}>{value}</p>
-                </div>
-            );
 
             return (
-                <div className="min-h-screen p-6" style={{ backgroundColor: colors.darkBackground }}>
-                    <div className="max-w-7xl mx-auto">
-                        {/* Cabeçalho */}
-                        <header className="flex items-center py-6 relative">
-                            <img
-                                src="https://taimeagencia.com.br/wp-content/webp-express/webp-images/uploads/2024/11/agencia-marketing-taime-aceleradora-marketing-vendas-estrategias-redes-sociais-videos-profissionais-campanha-anuncios-online-google-instagram-logo2.png.webp"
-                                alt="Taime Agência Logo"
-                                className="h-12 w-auto"
-                                onError={(e) => { e.target.src = 'https://placehold.co/150x50/201e26/28e7c5?text=TAIME_AGENCIA_LOGO'; }}
-                            />
-                            <h1 className="text-4xl font-bold text-center absolute left-1/2 transform -translate-x-1/2 whitespace-nowrap" style={{ color: colors.white }}>
-                                Dashboard de Prospecção Ativa
-                            </h1>
-                            <button 
-                                onClick={() => setShowDebug(!showDebug)}
-                                className="text-sm px-2 py-1 bg-gray-700 text-white rounded"
-                            >
-                                {showDebug ? 'Ocultar' : 'Mostrar'} Debug
-                            </button>
-                        </header>
+                <div className="container">
+                    <h1>🔥 Firebase Explorer - Dashboard Prospecção</h1>
+                    
+                    <div className="section">
+                        <h2>🔧 Controles</h2>
+                        <button onClick={() => exploreCollection('prospeccaoDiaria')} disabled={!firebaseReady}>
+                            📊 Explorar: prospeccaoDiaria
+                        </button>
+                        <button onClick={() => exploreCollection('artifacts')} disabled={!firebaseReady}>
+                            📊 Explorar: artifacts
+                        </button>
+                        <button onClick={() => exploreNestedPath('artifacts/dashboard-prospeccao-ativa')} disabled={!firebaseReady}>
+                            📂 Artifacts → Dashboard
+                        </button>
+                        <button onClick={() => exploreNestedPath('artifacts/dashboard-prospeccao-ativa/public/data')} disabled={!firebaseReady}>
+                            📂 Public → Data
+                        </button>
+                        <button onClick={() => testSpecificDocument('prospeccaoDiaria/2025-06-02')} disabled={!firebaseReady}>
+                            🎯 Teste: 2025-06-02
+                        </button>
+                        <button onClick={() => testSpecificDocument('artifacts/dashboard-prospeccao-ativa/public/data/salesDashboardData/funnelSummary')} disabled={!firebaseReady}>
+                            🎯 Teste: funnelSummary
+                        </button>
+                        <button onClick={clearLogs}>🗑️ Limpar</button>
+                    </div>
 
-                        {/* Debug Panel */}
-                        {showDebug && (
-                            <div className="debug-panel">
-                                <div className="flex justify-between items-center mb-2">
-                                    <strong>🔍 Debug Log:</strong>
-                                    <button 
-                                        onClick={() => setDebugInfo([])}
-                                        className="text-xs bg-red-600 px-2 py-1 rounded"
-                                    >
-                                        Limpar
-                                    </button>
+                    <div className="section">
+                        <h2>📋 Logs de Exploração</h2>
+                        <div className="json-display">
+                            {logs.map((log, index) => (
+                                <div key={index} className={log.type === 'error' ? 'error' : log.type === 'success' ? 'success' : log.type === 'warning' ? 'warning' : ''}>
+                                    [{log.timestamp}] {log.message}
                                 </div>
-                                {debugInfo.map((info, index) => (
-                                    <div key={index}>{info}</div>
-                                ))}
-                            </div>
-                        )}
+                            ))}
+                        </div>
+                    </div>
 
-                        {/* Status */}
-                        {(filterStatus || isProcessing) && (
-                            <div className="text-center mb-4 p-3 rounded-lg flex items-center justify-center" style={{ backgroundColor: colors.primaryPurple }}>
-                                {isProcessing && <div className="loading-spinner"></div>}
-                                <p style={{ color: colors.secondaryGreen }}>
-                                    {isProcessing ? 'Processando...' : filterStatus}
-                                </p>
-                            </div>
-                        )}
-
-                        {/* Filtros Rápidos */}
-                        <section className="text-center mb-6">
-                            <h3 className="text-lg font-semibold mb-3" style={{ color: colors.white }}>Filtros de Teste</h3>
-                            <div className="flex flex-wrap justify-center">
-                                {['today', 'specific', 'june2025', 'thisMonth', 'all'].map((filterKey) => {
-                                    const labels = {
-                                        today: 'Hoje',
-                                        specific: '02/06/2025',
-                                        june2025: 'Junho 2025',
-                                        thisMonth: 'Este Mês',
-                                        all: 'Todos os Dados'
-                                    };
-                                    
-                                    return (
-                                        <button
-                                            key={filterKey}
-                                            onClick={() => applyQuickFilter(filterKey)}
-                                            disabled={isProcessing || !firebaseReady}
-                                            className="mx-1 my-1 px-3 py-2 rounded-lg font-semibold text-sm disabled:opacity-50 hover:scale-105 transition-transform"
-                                            style={{ 
-                                                backgroundColor: colors.secondaryGreen, 
-                                                color: colors.darkBackground 
-                                            }}
-                                        >
-                                            {labels[filterKey]}
-                                        </button>
-                                    );
-                                })}
-                            </div>
-                        </section>
-
-                        {/* Filtro customizado */}
-                        <section className="flex flex-col md:flex-row justify-center items-center my-6 space-y-2 md:space-y-0 md:space-x-4">
-                            <div className="flex items-center space-x-2">
-                                <label style={{ color: colors.white }}>De:</label>
-                                <input
-                                    type="date"
-                                    value={startDate}
-                                    onChange={(e) => setStartDate(e.target.value)}
-                                    disabled={isProcessing || !firebaseReady}
-                                    className="p-2 text-sm rounded-lg bg-gray-800 border-2 border-gray-700 focus:outline-none focus:border-purple-600 disabled:opacity-50"
-                                    style={{ color: colors.white }}
-                                />
-                                
-                                <label style={{ color: colors.white }}>Até:</label>
-                                <input
-                                    type="date"
-                                    value={endDate}
-                                    onChange={(e) => setEndDate(e.target.value)}
-                                    disabled={isProcessing || !firebaseReady}
-                                    className="p-2 text-sm rounded-lg bg-gray-800 border-2 border-gray-700 focus:outline-none focus:border-purple-600 disabled:opacity-50"
-                                    style={{ color: colors.white }}
-                                />
-                            </div>
-                            
-                            <button
-                                onClick={applyDateFilter}
-                                disabled={isProcessing || !firebaseReady}
-                                className="px-4 py-2 rounded-lg font-semibold bg-gradient-to-r from-purple-600 to-indigo-600 text-white shadow-lg hover:shadow-xl transition-all duration-300 transform hover:scale-105 text-sm disabled:opacity-50 flex items-center"
-                            >
-                                {isProcessing && <div className="loading-spinner"></div>}
-                                Aplicar Filtro
-                            </button>
-                        </section>
-
-                        {/* Funil de Vendas */}
-                        <section className="my-8">
-                            <div className="flex flex-wrap md:flex-nowrap justify-center items-center">
-                                <FunnelCard title="Leads" value={funnelData.leads} bgColor={colors.primaryPurple} />
-                                <span className="text-4xl mx-2 md:mx-4 hidden md:block" style={{ color: colors.secondaryGreen }}>→</span>
-                                <FunnelCard title="Qualificação" value={funnelData.qualification} bgColor={colors.primaryPurple} />
-                                <span className="text-4xl mx-2 md:mx-4 hidden md:block" style={{ color: colors.secondaryGreen }}>→</span>
-                                <FunnelCard title="Reunião" value={funnelData.meeting} bgColor={colors.primaryPurple} />
-                                <span className="text-4xl mx-2 md:mx-4 hidden md:block" style={{ color: colors.secondaryGreen }}>→</span>
-                                <FunnelCard title="Proposta" value={funnelData.proposal} bgColor={colors.primaryPurple} />
-                                <span className="text-4xl mx-2 md:mx-4 hidden md:block" style={{ color: colors.secondaryGreen }}>→</span>
-                                <FunnelCard title="Negócio Fechado" value={funnelData.closedBusiness} bgColor={colors.secondaryGreen} />
-                            </div>
-                        </section>
-
-                        {/* Taxas de Conversão */}
-                        <section className="my-8">
-                            <div className="grid grid-cols-1 md:grid-cols-3 gap-4 max-w-4xl mx-auto">
-                                <div className="flex flex-col items-center p-3 rounded-xl shadow-md" style={{ backgroundColor: colors.primaryPurple }}>
-                                    <h4 className="text-md font-semibold text-center" style={{ color: colors.white }}>Taxa Total</h4>
-                                    <p className="text-2xl font-bold mt-1" style={{ color: colors.secondaryGreen }}>{conversionRates.overall}</p>
+                    {Object.keys(collections).length > 0 && (
+                        <div className="section">
+                            <h2>📊 Dados Encontrados</h2>
+                            {Object.entries(collections).map(([path, docs]) => (
+                                <div key={path}>
+                                    <h3>📁 {path}</h3>
+                                    <div className="json-display">
+                                        {JSON.stringify(docs, null, 2)}
+                                    </div>
                                 </div>
-                                <div className="flex flex-col items-center p-3 rounded-xl shadow-md" style={{ backgroundColor: colors.primaryPurple }}>
-                                    <h4 className="text-md font-semibold text-center" style={{ color: colors.white }}>Leads → Qual</h4>
-                                    <p className="text-2xl font-bold mt-1" style={{ color: colors.secondaryGreen }}>{conversionRates.leadsToQual}</p>
-                                </div>
-                                <div className="flex flex-col items-center p-3 rounded-xl shadow-md" style={{ backgroundColor: colors.primaryPurple }}>
-                                    <h4 className="text-md font-semibold text-center" style={{ color: colors.white }}>Qual → Meeting</h4>
-                                    <p className="text-2xl font-bold mt-1" style={{ color: colors.secondaryGreen }}>{conversionRates.qualToMeeting}</p>
-                                </div>
-                            </div>
-                        </section>
+                            ))}
+                        </div>
+                    )}
+
+                    <div className="section">
+                        <h2>🎯 Paths Conhecidos para Testar</h2>
+                        <ul>
+                            <li><code>prospeccaoDiaria</code> - Coleção principal de dados diários</li>
+                            <li><code>prospeccaoDiaria/2025-06-02</code> - Documento específico que vi no Firebase</li>
+                            <li><code>artifacts</code> - Coleção de artefatos</li>
+                            <li><code>artifacts/dashboard-prospeccao-ativa</code> - Documento do projeto</li>
+                            <li><code>artifacts/dashboard-prospeccao-ativa/public/data/salesDashboardData/funnelSummary</code> - Onde o frontend espera dados</li>
+                        </ul>
                     </div>
                 </div>
             );
         };
 
         const root = ReactDOM.createRoot(document.getElementById('root'));
-        root.render(<App />);
+        root.render(<FirebaseExplorer />);
     </script>
 </body>
 </html>
